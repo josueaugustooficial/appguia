@@ -1,0 +1,36 @@
+{
+  "name": "Farol",
+  "short_name": "Farol",
+  "description": "O guia que sua família precisava",
+  "start_url": "/home",
+  "display": "standalone",
+  "background_color": "#0F1729",
+  "theme_color": "#F59E0B",
+  "orientation": "portrait",
+  "categories": ["health", "lifestyle"],
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Modo SOS",
+      "short_name": "SOS",
+      "description": "Ativar protocolo de crise",
+      "url": "/sos",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
