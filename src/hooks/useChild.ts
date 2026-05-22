@@ -10,26 +10,48 @@ export function useChild() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let mounted = true
+
     const fetchChildren = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+      try {
+        // Usa getSession que é mais confiável que getUser no cliente
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!mounted) return
+        if (!session?.user) {
+          setLoading(false)
+          return
+        }
 
-      const { data } = await supabase
-        .from('children')
-        .select('*')
-        .eq('parent_id', user.id)
-        .order('created_at', { ascending: true })
+        const { data } = await supabase
+          .from('children')
+          .select('*')
+          .eq('parent_id', session.user.id)
+          .order('created_at', { ascending: true })
 
-      if (data && data.length > 0) {
-        setChildren(data)
-        // Load active child from localStorage or default to first
-        const savedId = localStorage.getItem('farol_active_child')
-        const found = data.find(c => c.id === savedId)
-        setActiveChildState(found || data[0])
+        if (!mounted) return
+
+        if (data && data.length > 0) {
+          setChildren(data)
+          const savedId = localStorage.getItem('farol_active_child')
+          const found = data.find(c => c.id === savedId)
+          setActiveChildState(found || data[0])
+        } else {
+          setChildren([])
+          setActiveChildState(null)
+        }
+      } catch {
+        // Silencia erros — tabela pode não existir ainda
+        if (mounted) {
+          setChildren([])
+          setActiveChildState(null)
+        }
+      } finally {
+        if (mounted) setLoading(false)
       }
-      setLoading(false)
     }
+
     fetchChildren()
+    return () => { mounted = false }
   }, [supabase])
 
   const setActiveChild = (child: Record<string, unknown>) => {
@@ -38,12 +60,12 @@ export function useChild() {
   }
 
   const refreshChildren = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) return
     const { data } = await supabase
       .from('children')
       .select('*')
-      .eq('parent_id', user.id)
+      .eq('parent_id', session.user.id)
     if (data) {
       setChildren(data)
       if (!activeChild && data.length > 0) setActiveChildState(data[0])
