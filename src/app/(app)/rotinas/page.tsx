@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useChild } from '@/hooks/useChild'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -72,12 +72,14 @@ type Routine = {
 }
 
 export default function RotinasPage() {
-  const supabase = createClient()
+  // ✅ FIX: useMemo evita nova instância a cada render
+  const supabase = useMemo(() => createClient(), [])
   const { activeChild } = useChild()
   const [routines, setRoutines] = useState<Routine[]>([])
   const [loading, setLoading] = useState(true)
   const [showEditor, setShowEditor] = useState(false)
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Editor state
   const [routineName, setRoutineName] = useState('')
@@ -138,46 +140,74 @@ export default function RotinasPage() {
   const saveRoutine = async () => {
     if (!activeChild || !routineName.trim()) return
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    setSaveError(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setSaveError('Sessão expirada. Faça login novamente.')
+        return
+      }
 
-    let routineId = editingRoutine?.id
+      let routineId = editingRoutine?.id
 
-    if (!routineId) {
-      const { data: newR } = await supabase
-        .from('routines')
-        .insert({
-          child_id: (activeChild as Record<string, string>).id,
-          parent_id: user.id,
+      if (!routineId) {
+        const { data: newR, error: insertError } = await supabase
+          .from('routines')
+          .insert({
+            child_id: (activeChild as Record<string, string>).id,
+            parent_id: user.id,
+            name: routineName,
+            days_of_week: selectedDays,
+          })
+          .select()
+          .single()
+
+        if (insertError || !newR) {
+          console.error('[Rotinas] Erro ao criar rotina:', insertError?.message)
+          setSaveError('Erro ao criar rotina. Tente novamente.')
+          return
+        }
+        routineId = newR.id
+      } else {
+        const { error: updateError } = await supabase.from('routines').update({
           name: routineName,
           days_of_week: selectedDays,
-        })
-        .select()
-        .single()
-      routineId = newR?.id
-    } else {
-      await supabase.from('routines').update({
-        name: routineName,
-        days_of_week: selectedDays,
-      }).eq('id', routineId)
-      await supabase.from('routine_steps').delete().eq('routine_id', routineId)
-    }
+        }).eq('id', routineId)
 
-    if (routineId && steps.length > 0) {
-      await supabase.from('routine_steps').insert(
-        steps.map((s, i) => ({
-          routine_id: routineId,
-          position: i,
-          title: s.title,
-          icon_key: s.icon_key,
-          duration_minutes: s.duration_minutes,
-        }))
-      )
-    }
+        if (updateError) {
+          console.error('[Rotinas] Erro ao atualizar rotina:', updateError.message)
+          setSaveError('Erro ao atualizar rotina. Tente novamente.')
+          return
+        }
+        await supabase.from('routine_steps').delete().eq('routine_id', routineId)
+      }
 
-    setSaving(false)
-    setShowEditor(false)
-    fetchRoutines()
+      // ✅ FIX: só insere steps se routineId existe (antes podia ser undefined)
+      if (routineId && steps.length > 0) {
+        const { error: stepsError } = await supabase.from('routine_steps').insert(
+          steps.map((s, i) => ({
+            routine_id: routineId,
+            position: i,
+            title: s.title,
+            icon_key: s.icon_key,
+            duration_minutes: s.duration_minutes,
+          }))
+        )
+        if (stepsError) {
+          console.error('[Rotinas] Erro ao salvar passos:', stepsError.message)
+          // Rotina foi salva mas passos falharam — informa mas não bloqueia
+          setSaveError('Rotina salva, mas erro ao salvar os passos.')
+        }
+      }
+
+      setShowEditor(false)
+      fetchRoutines()
+    } catch (err) {
+      console.error('[Rotinas] Exceção:', err)
+      setSaveError('Erro inesperado. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -428,6 +458,11 @@ export default function RotinasPage() {
                   </div>
                 </div>
 
+                {saveError && (
+                  <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '0.875rem', color: 'var(--red-alert)', fontSize: '0.85rem', textAlign: 'center' }}>
+                    ⚠️ {saveError}
+                  </div>
+                )}
                 <button
                   className="btn btn-primary btn-block btn-lg"
                   onClick={saveRoutine}

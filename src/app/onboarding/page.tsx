@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -27,10 +27,12 @@ const CALMING_OPTIONS = [
 ]
 
 export default function OnboardingPage() {
-  const supabase = createClient()
+  // ✅ FIX: useMemo evita nova instância a cada render
+  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [finishError, setFinishError] = useState<string | null>(null)
 
   // Step 1 — Parent
   const [parentName, setParentName] = useState('')
@@ -56,29 +58,50 @@ export default function OnboardingPage() {
 
   const handleFinish = async () => {
     setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+    setFinishError(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
 
-    // Create/update profile
-    await supabase.from('profiles').upsert({
-      id: user.id,
-      email: user.email,
-      full_name: parentName,
-      onboarding_completed: true,
-    })
+      // Cria/atualiza perfil
+      const { error: profileError } = await supabase.from('profiles').upsert({
+        id: user.id,
+        email: user.email,
+        full_name: parentName,
+        onboarding_completed: true,
+      })
 
-    // Create child
-    await supabase.from('children').insert({
-      parent_id: user.id,
-      name: childName,
-      nickname: nickname || null,
-      birth_date: birthDate || null,
-      hyperfocos: hiperfocos,
-      triggers: gatilhos,
-      calming_strategies: calming,
-    })
+      if (profileError) {
+        console.error('[Onboarding] Erro ao salvar perfil:', profileError.message)
+        setFinishError('Erro ao salvar perfil. Tente novamente.')
+        return
+      }
 
-    router.push('/home')
+      // Cria filho
+      const { error: childError } = await supabase.from('children').insert({
+        parent_id: user.id,
+        name: childName,
+        nickname: nickname || null,
+        birth_date: birthDate || null,
+        hyperfocos: hiperfocos,
+        triggers: gatilhos,
+        calming_strategies: calming,
+      })
+
+      if (childError) {
+        console.error('[Onboarding] Erro ao criar filho:', childError.message)
+        setFinishError('Erro ao criar perfil do filho. Tente novamente.')
+        return
+      }
+
+      router.push('/home')
+    } catch (err) {
+      console.error('[Onboarding] Exceção:', err)
+      setFinishError('Erro inesperado. Tente novamente.')
+    } finally {
+      // ✅ FIX: sempre reseta loading, mesmo em caso de erro
+      setLoading(false)
+    }
   }
 
   return (

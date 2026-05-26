@@ -6,16 +6,13 @@ import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 
 export function useAuth() {
-  // ✅ FIX CRÍTICO: useMemo garante que a instância do cliente Supabase
-  // seja criada UMA única vez por montagem do componente.
-  // Sem isso, createClient() retorna um objeto novo a cada render,
-  // fazendo o array de deps do useEffect detectar uma mudança falsa
-  // e re-executar infinitamente → loading infinito.
+  // ✅ useMemo: instância criada UMA vez por montagem — evita loop de re-render
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const fetchProfile = useCallback(async (userId: string) => {
     try {
@@ -28,21 +25,15 @@ export function useAuth() {
     } catch {
       setProfile(null)
     }
-  // ✅ supabase está memoizado, então é seguro incluí-lo aqui
   }, [supabase])
 
   useEffect(() => {
     let mounted = true
 
-    // ✅ Timeout de segurança: se em 8s o Supabase não responder,
-    // força saída do estado de loading para evitar tela travada.
     const safetyTimer = setTimeout(() => {
-      if (mounted) {
-        setLoading(false)
-      }
+      if (mounted) setLoading(false)
     }, 8000)
 
-    // 1. Carrega sessão imediatamente — não espera pelo evento
     const initSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
@@ -69,7 +60,6 @@ export function useAuth() {
 
     initSession()
 
-    // 2. Continua ouvindo mudanças de estado (logout, refresh de token)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return
@@ -79,7 +69,6 @@ export function useAuth() {
         } else {
           setProfile(null)
         }
-        // Garante que loading seja false após qualquer evento de auth
         setLoading(false)
       }
     )
@@ -89,14 +78,28 @@ export function useAuth() {
       clearTimeout(safetyTimer)
       subscription.unsubscribe()
     }
-  // ✅ supabase e fetchProfile são estáveis (useMemo/useCallback),
-  // portanto este useEffect executa UMA ÚNICA VEZ por montagem.
   }, [supabase, fetchProfile])
 
+  // ✅ FIX LOGOUT: await + router.refresh() + window.location fallback
   const signOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
+    setIsLoggingOut(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('[useAuth] Erro no logout:', error.message)
+        // Mesmo com erro, força o redirect para garantir saída
+      }
+      // router.refresh() invalida o cache do servidor — middleware rele o cookie limpo
+      router.refresh()
+      // window.location garante que o estado React é zerado completamente
+      window.location.href = '/login'
+    } catch (err) {
+      console.error('[useAuth] Exceção no logout:', err)
+      window.location.href = '/login'
+    } finally {
+      setIsLoggingOut(false)
+    }
   }
 
-  return { user, profile, loading, signOut, supabase }
+  return { user, profile, loading, isLoggingOut, signOut, supabase }
 }

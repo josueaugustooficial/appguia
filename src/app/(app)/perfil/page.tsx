@@ -7,7 +7,7 @@ import { SignOut, Devices, CreditCard, User } from '@phosphor-icons/react'
 import Link from 'next/link'
 
 export default function PerfilPage() {
-  const { user, profile, signOut } = useAuth()
+  const { user, profile, signOut, isLoggingOut } = useAuth()
   const { activeChild } = useChild()
 
   const p = profile as Record<string, string> | null
@@ -107,10 +107,11 @@ export default function PerfilPage() {
       <button
         className="btn btn-ghost btn-block"
         onClick={signOut}
+        disabled={isLoggingOut}
         id="signout-btn"
-        style={{ color: 'var(--red-alert)', borderColor: 'rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
+        style={{ color: isLoggingOut ? 'var(--text-muted)' : 'var(--red-alert)', borderColor: 'rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: isLoggingOut ? 0.7 : 1 }}
       >
-        <SignOut size={18} /> Sair da conta
+        <SignOut size={18} /> {isLoggingOut ? 'Saindo...' : 'Sair da conta'}
       </button>
 
       <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.72rem' }}>

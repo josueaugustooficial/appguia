@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useChild } from '@/hooks/useChild'
 import { createClient } from '@/lib/supabase/client'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -105,7 +105,8 @@ const GATILHOS_CHIPS = [
 
 export default function SOSPage() {
   const { activeChild, children, setActiveChild } = useChild()
-  const supabase = createClient()
+  // ✅ FIX: useMemo evita nova instância a cada render
+  const supabase = useMemo(() => createClient(), [])
 
   const [phase, setPhase] = useState<'select_child' | 'crisis_type' | 'protocol' | 'done' | 'register'>('crisis_type')
   const [crisisType, setCrisisType] = useState<string | null>(null)
@@ -116,6 +117,9 @@ export default function SOSPage() {
   const [trigger, setTrigger] = useState('')
   const [whatHelped, setWhatHelped] = useState('')
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>([])
+  // ✅ FIX: estado de loading/erro para o botão de salvar
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Start timer when entering protocol phase
@@ -148,35 +152,58 @@ export default function SOSPage() {
 
   const handleSave = async () => {
     if (!activeChild) return
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    setIsSaving(true)
+    setSaveError(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setSaveError('Sessão expirada. Faça login novamente.')
+        return
+      }
 
-    // Save to sos_sessions
-    await supabase.from('sos_sessions').insert({
-      child_id: (activeChild as Record<string, string>).id,
-      parent_id: user.id,
-      crisis_type: crisisType,
-      duration_seconds: seconds,
-      intensity,
-      trigger_identified: selectedTriggers.join(', '),
-      what_worked: whatHelped,
-      steps_completed: completedSteps,
-    })
+      // ✅ Salva sessão SOS
+      const { error: sosError } = await supabase.from('sos_sessions').insert({
+        child_id: (activeChild as Record<string, string>).id,
+        parent_id: user.id,
+        crisis_type: crisisType,
+        duration_seconds: seconds,
+        intensity,
+        trigger_identified: selectedTriggers.join(', '),
+        what_worked: whatHelped,
+        steps_completed: completedSteps,
+      })
 
-    // Also save to diary
-    await supabase.from('diary_entries').insert({
-      child_id: (activeChild as Record<string, string>).id,
-      parent_id: user.id,
-      entry_type: 'crisis',
-      title: `Crise: ${CRISIS_TYPES.find(c => c.id === crisisType)?.title || 'Crise'}`,
-      intensity,
-      traffic_light: intensity && intensity >= 4 ? 'red' : intensity === 3 ? 'yellow' : 'green',
-      duration_minutes: Math.round(seconds / 60),
-      possible_trigger: selectedTriggers.join(', '),
-      what_helped: whatHelped,
-    })
+      if (sosError) {
+        console.error('[SOS] Erro ao salvar sessão:', sosError.message)
+        setSaveError('Erro ao salvar. Tente novamente.')
+        return
+      }
 
-    setPhase('done')
+      // ✅ Salva também no diário
+      const { error: diaryError } = await supabase.from('diary_entries').insert({
+        child_id: (activeChild as Record<string, string>).id,
+        parent_id: user.id,
+        entry_type: 'crisis',
+        title: `Crise: ${CRISIS_TYPES.find(c => c.id === crisisType)?.title || 'Crise'}`,
+        intensity,
+        traffic_light: intensity && intensity >= 4 ? 'red' : intensity === 3 ? 'yellow' : 'green',
+        duration_minutes: Math.round(seconds / 60),
+        possible_trigger: selectedTriggers.join(', '),
+        what_helped: whatHelped,
+      })
+
+      if (diaryError) {
+        // Sessão SOS salva, mas diário falhou — não bloqueia o fluxo
+        console.error('[SOS] Erro ao salvar no diário:', diaryError.message)
+      }
+
+      setPhase('done')
+    } catch (err) {
+      console.error('[SOS] Exceção:', err)
+      setSaveError('Erro inesperado. Tente novamente.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   if (phase === 'select_child') {
@@ -468,12 +495,18 @@ export default function SOSPage() {
           />
         </div>
 
+        {saveError && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '0.875rem', color: 'var(--red-alert)', fontSize: '0.85rem', textAlign: 'center' }}>
+            ⚠️ {saveError}
+          </div>
+        )}
         <button
           className="btn btn-primary btn-block btn-lg"
           onClick={handleSave}
+          disabled={isSaving}
           id="sos-save-register"
         >
-          💾 Salvar no diário
+          {isSaving ? 'Salvando...' : '💾 Salvar no diário'}
         </button>
 
         <button

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useChild } from '@/hooks/useChild'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -37,7 +37,8 @@ type DiaryEntry = {
 }
 
 export default function DiarioPage() {
-  const supabase = createClient()
+  // ✅ FIX: useMemo evita nova instância a cada render
+  const supabase = useMemo(() => createClient(), [])
   const { activeChild } = useChild()
   const [entries, setEntries] = useState<DiaryEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,6 +54,7 @@ export default function DiarioPage() {
   const [selectedTriggers, setSelectedTriggers] = useState<string[]>([])
   const [whatHelped, setWhatHelped] = useState('')
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const fetchEntries = async () => {
     if (!activeChild) return
@@ -85,27 +87,47 @@ export default function DiarioPage() {
   const save = async () => {
     if (!activeChild || !entryType) return
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    setSaveError(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      // ✅ FIX: user ausente reseta saving e retorna com mensagem
+      if (!user) {
+        setSaveError('Sessão expirada. Faça login novamente.')
+        return
+      }
 
-    await supabase.from('diary_entries').insert({
-      child_id: (activeChild as Record<string, string>).id,
-      parent_id: user.id,
-      entry_type: entryType,
-      title: title || ENTRY_TYPES.find(e => e.id === entryType)?.label || '',
-      description,
-      intensity,
-      traffic_light: getTrafficLight(entryType, intensity),
-      duration_minutes: duration ? parseInt(duration) : null,
-      possible_trigger: selectedTriggers.join(', ') || null,
-      what_helped: whatHelped || null,
-    })
+      const { error } = await supabase.from('diary_entries').insert({
+        child_id: (activeChild as Record<string, string>).id,
+        parent_id: user.id,
+        entry_type: entryType,
+        title: title || ENTRY_TYPES.find(e => e.id === entryType)?.label || '',
+        description,
+        intensity,
+        traffic_light: getTrafficLight(entryType, intensity),
+        duration_minutes: duration ? parseInt(duration) : null,
+        possible_trigger: selectedTriggers.join(', ') || null,
+        what_helped: whatHelped || null,
+      })
 
-    setSaving(false)
-    setShowForm(false)
-    setTitle(''); setDescription(''); setIntensity(null); setDuration('')
-    setSelectedTriggers([]); setWhatHelped('')
-    fetchEntries()
+      // ✅ FIX: trata erro de RLS/DB explicitamente
+      if (error) {
+        console.error('[Diário] Erro ao salvar:', error.message)
+        setSaveError('Erro ao salvar. Tente novamente.')
+        return
+      }
+
+      // Sucesso
+      setShowForm(false)
+      setTitle(''); setDescription(''); setIntensity(null); setDuration('')
+      setSelectedTriggers([]); setWhatHelped('')
+      fetchEntries()
+    } catch (err) {
+      console.error('[Diário] Exceção:', err)
+      setSaveError('Erro inesperado. Tente novamente.')
+    } finally {
+      // ✅ FIX: sempre reseta o loading, em qualquer caminho
+      setSaving(false)
+    }
   }
 
   // Build calendar data
@@ -400,6 +422,12 @@ export default function DiarioPage() {
                   />
                 </div>
 
+                {/* ✅ FIX: exibe erro se o save falhar */}
+                {saveError && (
+                  <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '0.875rem', color: 'var(--red-alert)', fontSize: '0.85rem', textAlign: 'center' }}>
+                    ⚠️ {saveError}
+                  </div>
+                )}
                 <button
                   className="btn btn-primary btn-block btn-lg"
                   onClick={save}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
 
@@ -30,7 +30,8 @@ const GROUNDING = [
 ]
 
 export default function MeuEspacoPage() {
-  const supabase = createClient()
+  // ✅ FIX: useMemo evita nova instância a cada render
+  const supabase = useMemo(() => createClient(), [])
   const [activeTab, setActiveTab] = useState<'checkin' | 'breath' | 'grounding' | 'affirmation'>('checkin')
   const [mood, setMood] = useState<number | null>(null)
   const [energy, setEnergy] = useState<number | null>(null)
@@ -70,16 +71,25 @@ export default function MeuEspacoPage() {
 
   const saveCheckin = async () => {
     if (!mood) return
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('parent_checkins').upsert({
-      user_id: user.id,
-      checkin_date: new Date().toISOString().split('T')[0],
-      mood_score: mood,
-      energy_score: energy,
-      stress_score: stress,
-    })
-    setCheckinSaved(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      // ✅ FIX: onConflict explícito para garantir UPDATE policy correta
+      const { error } = await supabase.from('parent_checkins').upsert({
+        user_id: user.id,
+        checkin_date: new Date().toISOString().split('T')[0],
+        mood_score: mood,
+        energy_score: energy,
+        stress_score: stress,
+      }, { onConflict: 'user_id,checkin_date' })
+      if (error) {
+        console.error('[Meu Espaço] Erro ao salvar check-in:', error.message)
+        return
+      }
+      setCheckinSaved(true)
+    } catch (err) {
+      console.error('[Meu Espaço] Exceção:', err)
+    }
   }
 
   const TABS = [

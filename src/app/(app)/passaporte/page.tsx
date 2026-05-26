@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useChild } from '@/hooks/useChild'
 import { motion } from 'framer-motion'
@@ -12,13 +12,15 @@ const QRCode = dynamic(() => import('qrcode.react').then(m => m.QRCodeSVG), { ss
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://guia.a7creative.com.br'
 
 export default function PassaportePage() {
-  const supabase = createClient()
+  // ✅ FIX: useMemo evita nova instância a cada render
+  const supabase = useMemo(() => createClient(), [])
   const { activeChild, refreshChildren } = useChild()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [message, setMessage] = useState('')
   const [isPublic, setIsPublic] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const child = activeChild as Record<string, string | boolean | string[]> | null
 
@@ -55,23 +57,45 @@ export default function PassaportePage() {
     if (!child?.id) return
     const newPublic = !isPublic
     setIsPublic(newPublic)
-    await supabase
-      .from('children')
-      .update({ passport_is_public: newPublic })
-      .eq('id', child.id)
-    refreshChildren()
+    try {
+      const { error } = await supabase
+        .from('children')
+        .update({ passport_is_public: newPublic })
+        .eq('id', child.id)
+      if (error) {
+        console.error('[Passaporte] Erro ao alterar visibilidade:', error.message)
+        setIsPublic(!newPublic) // reverte em caso de erro
+      } else {
+        refreshChildren()
+      }
+    } catch (err) {
+      console.error('[Passaporte] Exceção:', err)
+      setIsPublic(!newPublic)
+    }
   }
 
   const saveMessage = async () => {
     if (!child?.id) return
     setSaving(true)
-    await supabase
-      .from('children')
-      .update({ passport_message: message })
-      .eq('id', child.id)
-    setSaving(false)
-    setEditing(false)
-    refreshChildren()
+    setSaveError(null)
+    try {
+      const { error } = await supabase
+        .from('children')
+        .update({ passport_message: message })
+        .eq('id', child.id)
+      if (error) {
+        console.error('[Passaporte] Erro ao salvar mensagem:', error.message)
+        setSaveError('Erro ao salvar. Tente novamente.')
+      } else {
+        setEditing(false)
+        refreshChildren()
+      }
+    } catch (err) {
+      console.error('[Passaporte] Exceção:', err)
+      setSaveError('Erro inesperado.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (!child) {
