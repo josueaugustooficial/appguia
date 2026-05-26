@@ -1,12 +1,17 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 
 export function useAuth() {
-  const supabase = createClient()
+  // ✅ FIX CRÍTICO: useMemo garante que a instância do cliente Supabase
+  // seja criada UMA única vez por montagem do componente.
+  // Sem isso, createClient() retorna um objeto novo a cada render,
+  // fazendo o array de deps do useEffect detectar uma mudança falsa
+  // e re-executar infinitamente → loading infinito.
+  const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null)
@@ -23,10 +28,19 @@ export function useAuth() {
     } catch {
       setProfile(null)
     }
+  // ✅ supabase está memoizado, então é seguro incluí-lo aqui
   }, [supabase])
 
   useEffect(() => {
     let mounted = true
+
+    // ✅ Timeout de segurança: se em 8s o Supabase não responder,
+    // força saída do estado de loading para evitar tela travada.
+    const safetyTimer = setTimeout(() => {
+      if (mounted) {
+        setLoading(false)
+      }
+    }, 8000)
 
     // 1. Carrega sessão imediatamente — não espera pelo evento
     const initSession = async () => {
@@ -46,7 +60,10 @@ export function useAuth() {
           setProfile(null)
         }
       } finally {
-        if (mounted) setLoading(false)
+        if (mounted) {
+          clearTimeout(safetyTimer)
+          setLoading(false)
+        }
       }
     }
 
@@ -62,15 +79,18 @@ export function useAuth() {
         } else {
           setProfile(null)
         }
-        // Só atualiza loading se ainda estava true (evita flash)
+        // Garante que loading seja false após qualquer evento de auth
         setLoading(false)
       }
     )
 
     return () => {
       mounted = false
+      clearTimeout(safetyTimer)
       subscription.unsubscribe()
     }
+  // ✅ supabase e fetchProfile são estáveis (useMemo/useCallback),
+  // portanto este useEffect executa UMA ÚNICA VEZ por montagem.
   }, [supabase, fetchProfile])
 
   const signOut = async () => {

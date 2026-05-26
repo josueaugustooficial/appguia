@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { useChild } from '@/hooks/useChild'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import {
-  Lightbulb, SunHorizon, Moon, Coffee,
+  Lightbulb,
   ArrowRight, Smiley, SmileySad, SmileyMeh,
-  SmileyWink, SmileyXEyes, CheckCircle
+  SmileyWink, SmileyXEyes, CheckCircle, ArrowClockwise
 } from '@phosphor-icons/react'
 
 function getGreeting() {
@@ -38,6 +38,13 @@ const DAILY_TIP = {
 
 const WEEK_DAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 
+// ✅ Mock data mantido por decisão do produto (dados reais na próxima fase)
+const MOCK_WEEK_DATA = [
+  { status: 'green' }, { status: 'yellow' }, { status: 'green' },
+  { status: 'red' }, { status: 'yellow' }, { status: 'green' },
+  { status: null }, // hoje
+]
+
 export default function HomePage() {
   const { user, profile, loading: authLoading } = useAuth()
   const { activeChild, loading: childLoading } = useChild()
@@ -45,14 +52,33 @@ export default function HomePage() {
   const [checkinDone, setCheckinDone] = useState(false)
   const [checkinMood, setCheckinMood] = useState<number | null>(null)
   const [showCheckin, setShowCheckin] = useState(true)
-  const [weekData] = useState(() => {
-    // Mock week data - in real app fetched from diary_entries
-    return [
-      { status: 'green' }, { status: 'yellow' }, { status: 'green' },
-      { status: 'red' }, { status: 'yellow' }, { status: 'green' },
-      { status: null }, // today
-    ]
-  })
+
+  // ✅ FIX: Timeout de segurança na própria página.
+  // Se os hooks não resolverem em 10s (ex: problema de rede fora do loop),
+  // força saída do estado de loading e exibe error state.
+  const [timedOut, setTimedOut] = useState(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    timeoutRef.current = setTimeout(() => {
+      setTimedOut(true)
+    }, 10000)
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
+
+  // Quando os hooks resolverem, cancela o timeout de segurança
+  useEffect(() => {
+    if (!authLoading && !childLoading) {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
+      setTimedOut(false)
+    }
+  }, [authLoading, childLoading])
 
   const parentName = (profile as Record<string, string> | null)?.full_name?.split(' ')[0] || 'você'
   const childName = (activeChild as Record<string, string> | null)?.name || ''
@@ -61,22 +87,66 @@ export default function HomePage() {
   const handleCheckin = (mood: number) => {
     setCheckinMood(mood)
     setCheckinDone(true)
-    // TODO: save to parent_checkins table
+    // TODO: salvar em parent_checkins no Supabase (próxima fase)
     setTimeout(() => setShowCheckin(false), 2000)
   }
 
-  if (authLoading || childLoading) {
+  // ─── ESTADO: LOADING (com proteção de timeout) ─────────────────────────────
+  if ((authLoading || childLoading) && !timedOut) {
     return (
       <div style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: '0.5rem' }}>
+          <div>
+            <div className="skeleton" style={{ height: '18px', width: '120px', borderRadius: '8px', marginBottom: '8px' }} />
+            <div className="skeleton" style={{ height: '36px', width: '180px', borderRadius: '8px' }} />
+          </div>
+          <div className="skeleton" style={{ width: '44px', height: '44px', borderRadius: '50%' }} />
+        </div>
+        <div className="skeleton" style={{ height: '100px', borderRadius: '16px' }} />
+        <div className="skeleton" style={{ height: '72px', borderRadius: '16px' }} />
         <div className="skeleton" style={{ height: '80px', borderRadius: '16px' }} />
         <div className="skeleton" style={{ height: '120px', borderRadius: '16px' }} />
-        <div className="skeleton" style={{ height: '80px', borderRadius: '16px' }} />
       </div>
     )
   }
 
+  // ─── ESTADO: TIMEOUT / ERRO ────────────────────────────────────────────────
+  if (timedOut) {
+    return (
+      <div style={{
+        minHeight: '60vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem',
+        textAlign: 'center',
+        gap: '1rem',
+      }}>
+        <div style={{ fontSize: '3rem' }}>⚡</div>
+        <h2 style={{ fontFamily: 'Fraunces, Georgia, serif', fontSize: '1.4rem', color: 'var(--text-primary)' }}>
+          Demora mais que o esperado
+        </h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: '280px' }}>
+          Pode ser instabilidade temporária na conexão. Tente recarregar a página.
+        </p>
+        <button
+          className="btn btn-primary"
+          onClick={() => window.location.reload()}
+          id="home-retry-btn"
+          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+        >
+          <ArrowClockwise size={18} weight="bold" />
+          Tentar novamente
+        </button>
+      </div>
+    )
+  }
+
+  // ─── ESTADO: CONTEÚDO ──────────────────────────────────────────────────────
   return (
     <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+
       {/* HEADER — SAUDAÇÃO */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -120,7 +190,7 @@ export default function HomePage() {
           border: '1px solid var(--navy-light)',
           fontSize: '1.25rem',
         }}>
-          {greeting.icon === '☀️' ? '☀️' : greeting.icon === '🌤️' ? '🌤️' : '🌙'}
+          {greeting.icon}
         </div>
       </motion.div>
 
@@ -212,14 +282,19 @@ export default function HomePage() {
               </Link>
             </p>
           ) : (
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center' }}>
-              Nenhuma rotina criada ainda
-            </p>
+            <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>
+                Nenhum filho cadastrado ainda
+              </p>
+              <Link href="/perfil" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
+                + Cadastrar filho
+              </Link>
+            </div>
           )}
         </div>
       </motion.div>
 
-      {/* SEMÁFORO SEMANAL */}
+      {/* SEMÁFORO SEMANAL — mock data por decisão de produto */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -233,13 +308,13 @@ export default function HomePage() {
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{day}</span>
                 <div
                   className={`traffic-light ${
-                    weekData[i].status === 'green' ? 'traffic-green' :
-                    weekData[i].status === 'yellow' ? 'traffic-yellow' :
-                    weekData[i].status === 'red' ? 'traffic-red' : ''
+                    MOCK_WEEK_DATA[i].status === 'green' ? 'traffic-green' :
+                    MOCK_WEEK_DATA[i].status === 'yellow' ? 'traffic-yellow' :
+                    MOCK_WEEK_DATA[i].status === 'red' ? 'traffic-red' : ''
                   }`}
                   style={{
-                    opacity: weekData[i].status ? 1 : 0.3,
-                    background: !weekData[i].status ? 'var(--navy-light)' : undefined,
+                    opacity: MOCK_WEEK_DATA[i].status ? 1 : 0.3,
+                    background: !MOCK_WEEK_DATA[i].status ? 'var(--navy-light)' : undefined,
                   }}
                 />
               </div>
@@ -348,7 +423,7 @@ export default function HomePage() {
         </div>
       </motion.div>
 
-      {/* SPACER */}
+      {/* SPACER para a bottom nav */}
       <div style={{ height: '1rem' }} />
     </div>
   )
