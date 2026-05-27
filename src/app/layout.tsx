@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { PWARegister } from "./pwa-register";
 
 export const metadata: Metadata = {
   title: "Farol — O guia que sua família precisava",
@@ -12,6 +13,9 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "Farol",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
   openGraph: {
     title: "Farol — O guia que sua família precisava",
@@ -29,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F59E0B",
+  themeColor: "#0F1729",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -50,10 +54,21 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
           rel="stylesheet"
         />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        {/* PWA — Apple Touch Icon */}
+        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        {/* PWA — Status bar e theme color para iOS */}
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Farol" />
+        <meta name="theme-color" content="#0F1729" />
+        {/* PWA — Microsoft Tiles */}
+        <meta name="msapplication-TileColor" content="#0F1729" />
+        <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
       </head>
       <body className="antialiased">
         {children}
+        {/* Registra o Service Worker para PWA */}
+        <PWARegister />
       </body>
     </html>
   );

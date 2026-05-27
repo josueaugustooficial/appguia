@@ -2,8 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // ✅ FIX: Guarda de variáveis de ambiente.
-  // Se estiverem ausentes no Vercel, redireciona para /login em vez de travar.
+  // ✅ Guarda de variáveis de ambiente.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
@@ -33,16 +32,13 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // ✅ FIX: try/catch em toda a verificação de autenticação.
-  // Se o Supabase não responder (timeout, erro de rede, key inválida),
-  // a request NÃO fica pendurada — redireciona para /login imediatamente.
+  // ✅ try/catch em toda verificação de autenticação.
   let user = null
   try {
     const result = await supabase.auth.getUser()
     user = result.data?.user ?? null
   } catch (err) {
     console.error('[middleware] Falha ao verificar usuário:', err)
-    // Se não conseguir verificar, trata como não autenticado
     user = null
   }
 
@@ -74,6 +70,37 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = user ? '/home' : '/login'
     return NextResponse.redirect(url)
+  }
+
+  // ✅ FASE 3 — Verificação de onboarding:
+  // Usuário autenticado mas sem filho cadastrado → /onboarding (obrigatório)
+  // Esta verificação só roda em rotas do app (não onboarding, não rotas públicas)
+  if (
+    user &&
+    !request.nextUrl.pathname.startsWith('/onboarding') &&
+    !request.nextUrl.pathname.startsWith('/login') &&
+    !request.nextUrl.pathname.startsWith('/passaporte') &&
+    !request.nextUrl.pathname.startsWith('/auth') &&
+    !request.nextUrl.pathname.startsWith('/api')
+  ) {
+    try {
+      // Query leve — busca apenas existência de filho, não dados completos
+      const { data: children, error } = await supabase
+        .from('children')
+        .select('id')
+        .eq('parent_id', user.id)
+        .limit(1)
+
+      if (!error && (!children || children.length === 0)) {
+        // Usuário sem filho → redireciona para onboarding obrigatório
+        const url = request.nextUrl.clone()
+        url.pathname = '/onboarding'
+        return NextResponse.redirect(url)
+      }
+    } catch (err) {
+      // Se a query falhar, deixa o usuário passar (não trava o app)
+      console.error('[middleware] Falha ao verificar filhos:', err)
+    }
   }
 
   return supabaseResponse

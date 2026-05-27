@@ -1,26 +1,62 @@
 {
-  "name": "Farol",
+  "name": "Farol — Guia para Pais TEA",
   "short_name": "Farol",
-  "description": "O guia que sua família precisava",
+  "description": "Seu guia diário para os dias com seu filho autista. Modo SOS, rotinas visuais, diário e muito mais.",
   "start_url": "/home",
   "display": "standalone",
   "background_color": "#0F1729",
-  "theme_color": "#F59E0B",
+  "theme_color": "#0F1729",
   "orientation": "portrait",
-  "categories": ["health", "lifestyle"],
   "lang": "pt-BR",
+  "categories": ["health", "lifestyle", "education"],
   "icons": [
     {
-      "src": "/icons/icon-192.png",
-      "sizes": "192x192",
+      "src": "/icons/icon-72x72.png",
+      "sizes": "72x72",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "/icons/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable any"
     }
   ],
   "screenshots": [],
@@ -28,9 +64,16 @@
     {
       "name": "Modo SOS",
       "short_name": "SOS",
-      "description": "Ativar protocolo de crise",
+      "description": "Ativar protocolo de crise imediatamente",
       "url": "/sos",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Diário",
+      "short_name": "Diário",
+      "description": "Registrar comportamento do dia",
+      "url": "/diario",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ]
 }
