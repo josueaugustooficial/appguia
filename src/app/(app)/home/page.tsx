@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useChild } from '@/hooks/useChild'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { InstallPWA } from '@/components/InstallPWA'
 import {
   Lightbulb,
   ArrowRight, Smiley, SmileySad, SmileyMeh,
@@ -422,6 +423,9 @@ export default function HomePage() {
           ))}
         </div>
       </motion.div>
+
+      {/* BANNER DE INSTALAÇÃO PWA — aparece 5s após load, apenas mobile */}
+      <InstallPWA />
 
       {/* SPACER para a bottom nav */}
       <div style={{ height: '1rem' }} />
