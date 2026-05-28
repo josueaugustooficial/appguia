@@ -11,6 +11,7 @@ import {
   ArrowRight, Smiley, SmileySad, SmileyMeh,
   SmileyWink, SmileyXEyes, CheckCircle, ArrowClockwise
 } from '@phosphor-icons/react'
+import { createClient } from '@/lib/supabase/client'
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -49,6 +50,7 @@ const MOCK_WEEK_DATA = [
 export default function HomePage() {
   const { user, profile, loading: authLoading } = useAuth()
   const { activeChild, loading: childLoading } = useChild()
+  const supabase = createClient()
   const [greeting] = useState(getGreeting())
   const [checkinDone, setCheckinDone] = useState(false)
   const [checkinMood, setCheckinMood] = useState<number | null>(null)
