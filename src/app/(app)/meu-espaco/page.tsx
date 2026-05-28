@@ -37,6 +37,8 @@ export default function MeuEspacoPage() {
   const [energy, setEnergy] = useState<number | null>(null)
   const [stress, setStress] = useState<number | null>(null)
   const [checkinSaved, setCheckinSaved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [breathPhase, setBreathPhase] = useState(0)
   const [breathActive, setBreathActive] = useState(false)
   const [breathCount, setBreathCount] = useState(0)
@@ -70,10 +72,15 @@ export default function MeuEspacoPage() {
   }, [breathActive])
 
   const saveCheckin = async () => {
-    if (!mood) return
+    if (!mood || isSaving) return
+    setIsSaving(true)
+    setSaveError(null)
     try {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        setSaveError('Sessão expirada. Faça login novamente.')
+        return
+      }
       // ✅ FIX: onConflict explícito para garantir UPDATE policy correta
       const { error } = await supabase.from('parent_checkins').upsert({
         user_id: user.id,
@@ -83,12 +90,16 @@ export default function MeuEspacoPage() {
         stress_score: stress,
       }, { onConflict: 'user_id,checkin_date' })
       if (error) {
-        console.error('[Meu Espaço] Erro ao salvar check-in:', error.message)
+        console.error('[MEU-ESPACO SAVE ERROR]', error.message)
+        setSaveError('Erro ao salvar. Tente novamente.')
         return
       }
       setCheckinSaved(true)
     } catch (err) {
       console.error('[Meu Espaço] Exceção:', err)
+      setSaveError('Erro inesperado. Tente novamente.')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -158,8 +169,13 @@ export default function MeuEspacoPage() {
                   </div>
                 </div>
 
-                <button className="btn btn-calm btn-block btn-lg" onClick={saveCheckin} disabled={!mood} id="save-checkin">
-                  💾 Salvar check-in
+                {saveError && (
+                  <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '0.875rem', color: 'var(--red-alert)', fontSize: '0.85rem', textAlign: 'center' }}>
+                    ⚠️ {saveError}
+                  </div>
+                )}
+                <button className="btn btn-calm btn-block btn-lg" onClick={saveCheckin} disabled={!mood || isSaving} id="save-checkin">
+                  {isSaving ? 'Salvando...' : '💾 Salvar check-in'}
                 </button>
               </div>
             )}

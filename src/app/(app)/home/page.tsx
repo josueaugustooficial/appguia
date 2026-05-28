@@ -53,6 +53,8 @@ export default function HomePage() {
   const [checkinDone, setCheckinDone] = useState(false)
   const [checkinMood, setCheckinMood] = useState<number | null>(null)
   const [showCheckin, setShowCheckin] = useState(true)
+  const [isCheckingIn, setIsCheckingIn] = useState(false)
+  const [checkinError, setCheckinError] = useState<string | null>(null)
 
   // ✅ FIX: Timeout de segurança na própria página.
   // Se os hooks não resolverem em 10s (ex: problema de rede fora do loop),
@@ -85,11 +87,31 @@ export default function HomePage() {
   const childName = (activeChild as Record<string, string> | null)?.name || ''
   const childAge = getChildAge((activeChild as Record<string, string> | null)?.birth_date ?? null)
 
-  const handleCheckin = (mood: number) => {
-    setCheckinMood(mood)
-    setCheckinDone(true)
-    // TODO: salvar em parent_checkins no Supabase (próxima fase)
-    setTimeout(() => setShowCheckin(false), 2000)
+  const handleCheckin = async (mood: number) => {
+    if (!user || isCheckingIn) return
+    setIsCheckingIn(true)
+    setCheckinError(null)
+    try {
+      const { error } = await supabase
+        .from('parent_checkins')
+        .insert({
+          user_id: user.id,
+          mood_score: mood,
+        })
+      if (error) {
+        console.error('[CHECKIN ERROR]', error)
+        setCheckinError('Erro ao registrar. Tente novamente.')
+        return
+      }
+      setCheckinMood(mood)
+      setCheckinDone(true)
+      setTimeout(() => setShowCheckin(false), 2000)
+    } catch (err) {
+      console.error('[CHECKIN UNEXPECTED]', err)
+      setCheckinError('Erro inesperado.')
+    } finally {
+      setIsCheckingIn(false)
+    }
   }
 
   // ─── ESTADO: LOADING (com proteção de timeout) ─────────────────────────────
@@ -367,6 +389,7 @@ export default function HomePage() {
                       key={mood}
                       className={`emoji-btn ${checkinMood === mood ? 'selected' : ''}`}
                       onClick={() => handleCheckin(mood)}
+                      disabled={isCheckingIn}
                       id={`checkin-mood-${mood}`}
                       aria-label={`Humor ${mood} de 5`}
                     >
@@ -374,6 +397,11 @@ export default function HomePage() {
                     </button>
                   ))}
                 </div>
+                {checkinError && (
+                  <p style={{ color: 'var(--red-alert)', fontSize: '0.8rem', marginTop: '0.75rem' }}>
+                    ⚠️ {checkinError}
+                  </p>
+                )}
               </>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

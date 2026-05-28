@@ -39,21 +39,40 @@ export default function AtividadesPage() {
   const [category, setCategory] = useState('all')
   const [selected, setSelected] = useState<typeof ACTIVITIES[0] | null>(null)
   const [logged, setLogged] = useState<string[]>([])
+  const [loggingId, setLoggingId] = useState<string | null>(null)
+  const [logError, setLogError] = useState<string | null>(null)
 
   const filtered = ACTIVITIES.filter(a => category === 'all' || a.category === category)
 
   const handleLog = async (activity: typeof ACTIVITIES[0]) => {
-    if (!activeChild) return
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('activity_logs').insert({
-      child_id: (activeChild as Record<string, string>).id,
-      parent_id: user.id,
-      notes: `Atividade: ${activity.title}`,
-      child_enjoyed: true,
-    })
-    setLogged(p => [...p, activity.id])
-    setSelected(null)
+    if (!activeChild || loggingId === activity.id) return
+    setLoggingId(activity.id)
+    setLogError(null)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setLogError('Usuário não autenticado.')
+        return
+      }
+      const { error } = await supabase.from('activity_logs').insert({
+        child_id: (activeChild as Record<string, string>).id,
+        parent_id: user.id,
+        notes: `Atividade: ${activity.title}`,
+        child_enjoyed: true,
+      })
+      if (error) {
+        console.error('[ACTIVITY LOG ERROR]', error)
+        setLogError('Erro ao registrar atividade.')
+        return
+      }
+      setLogged(p => [...p, activity.id])
+      setSelected(null)
+    } catch (err) {
+      console.error('[ACTIVITY UNEXPECTED ERROR]', err)
+      setLogError('Erro inesperado.')
+    } finally {
+      setLoggingId(null)
+    }
   }
 
   return (
@@ -123,8 +142,13 @@ export default function AtividadesPage() {
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.6 }}>{selected.celebrate}</p>
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontStyle: 'italic', textAlign: 'center' }}>📚 Baseado em: {selected.source}</p>
-                <button className="btn btn-primary btn-block btn-lg" onClick={() => handleLog(selected)} disabled={logged.includes(selected.id)} id="log-activity-btn">
-                  {logged.includes(selected.id) ? <><Check size={18} /> Registrada!</> : '✅ Marcar como feita'}
+                {logError && (
+                  <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '0.875rem', color: 'var(--red-alert)', fontSize: '0.85rem', textAlign: 'center' }}>
+                    ⚠️ {logError}
+                  </div>
+                )}
+                <button className="btn btn-primary btn-block btn-lg" onClick={() => handleLog(selected)} disabled={logged.includes(selected.id) || loggingId === selected.id} id="log-activity-btn">
+                  {loggingId === selected.id ? 'Registrando...' : logged.includes(selected.id) ? <><Check size={18} /> Registrada!</> : '✅ Marcar como feita'}
                 </button>
                 <div style={{ height: '1rem' }} />
               </div>

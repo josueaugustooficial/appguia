@@ -21,6 +21,7 @@ export default function PassaportePage() {
   const [message, setMessage] = useState('')
   const [isPublic, setIsPublic] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [isToggling, setIsToggling] = useState(false)
 
   const child = activeChild as Record<string, string | boolean | string[]> | null
 
@@ -54,7 +55,9 @@ export default function PassaportePage() {
   }
 
   const togglePublic = async () => {
-    if (!child?.id) return
+    if (!child?.id || isToggling) return
+    setIsToggling(true)
+    setSaveError(null)
     const newPublic = !isPublic
     setIsPublic(newPublic)
     try {
@@ -63,14 +66,18 @@ export default function PassaportePage() {
         .update({ passport_is_public: newPublic })
         .eq('id', child.id)
       if (error) {
-        console.error('[Passaporte] Erro ao alterar visibilidade:', error.message)
+        console.error('[TOGGLE PUBLIC ERROR]', error)
+        setSaveError('Erro ao alterar visibilidade.')
         setIsPublic(!newPublic) // reverte em caso de erro
-      } else {
-        refreshChildren()
+        return
       }
+      refreshChildren()
     } catch (err) {
       console.error('[Passaporte] Exceção:', err)
+      setSaveError('Erro inesperado.')
       setIsPublic(!newPublic)
+    } finally {
+      setIsToggling(false)
     }
   }
 
@@ -212,7 +219,8 @@ export default function PassaportePage() {
           </div>
           <button
             onClick={togglePublic}
-            style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+            disabled={isToggling}
+            style={{ background: 'none', border: 'none', cursor: isToggling ? 'not-allowed' : 'pointer', opacity: isToggling ? 0.5 : 1 }}
             id="passport-toggle-public"
           >
             {isPublic
@@ -221,6 +229,11 @@ export default function PassaportePage() {
             }
           </button>
         </div>
+        {saveError && (
+          <p style={{ color: 'var(--red-alert)', fontSize: '0.8rem', marginTop: '0.75rem' }}>
+            ⚠️ {saveError}
+          </p>
+        )}
       </div>
 
       {/* QR CODE */}
