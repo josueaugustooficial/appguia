@@ -34,8 +34,6 @@ export default function MeuEspacoPage() {
   const supabase = useMemo(() => createClient(), [])
   const [activeTab, setActiveTab] = useState<'checkin' | 'breath' | 'grounding' | 'affirmation'>('checkin')
   const [mood, setMood] = useState<number | null>(null)
-  const [energy, setEnergy] = useState<number | null>(null)
-  const [stress, setStress] = useState<number | null>(null)
   const [checkinSaved, setCheckinSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -76,21 +74,16 @@ export default function MeuEspacoPage() {
     setIsSaving(true)
     setSaveError(null)
     try {
-      // ✅ FIX CRÍTICO: getSession() é mais confiável no cliente do que getUser()
-      // getUser() faz round-trip ao servidor e pode falhar por timing
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.user) {
         setSaveError('Sessão expirada. Faça login novamente.')
         return
       }
-      // ✅ FIX: insert simples — upsert com onConflict falha silenciosamente
-      // se a constraint UNIQUE 'user_id,checkin_date' não existir no banco.
-      // Insert garante que o erro seja reportado e o dado seja sempre inserido.
+      // ✅ FIX CRÍTICO: tabela parent_checkins tem apenas: id, user_id, mood_score, notes, created_at
+      // energy_score e stress_score não existem ainda — insert estava falhando com PGRST204
       const { error } = await supabase.from('parent_checkins').insert({
         user_id: session.user.id,
         mood_score: mood,
-        energy_score: energy,
-        stress_score: stress,
       })
       if (error) {
         console.error('[MEU-ESPACO SAVE ERROR]', error.code, error.message, error.details)
@@ -154,23 +147,7 @@ export default function MeuEspacoPage() {
                   </div>
                 </div>
 
-                <div className="card">
-                  <p style={{ fontWeight: 700, marginBottom: '0.75rem' }}>⚡ Energia (1-5)</p>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {[1, 2, 3, 4, 5].map(i => (
-                      <button key={i} onClick={() => setEnergy(i)} style={{ flex: 1, height: '40px', borderRadius: '10px', border: `2px solid ${energy === i ? 'var(--lilac-calm)' : 'var(--navy-light)'}`, background: energy === i ? 'rgba(167,139,250,0.15)' : 'var(--navy-light)', color: energy === i ? 'var(--lilac-calm)' : 'var(--text-secondary)', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }} id={`energy-${i}`}>{i}</button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="card">
-                  <p style={{ fontWeight: 700, marginBottom: '0.75rem' }}>🌡️ Estresse (1-5)</p>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    {[1, 2, 3, 4, 5].map(i => (
-                      <button key={i} onClick={() => setStress(i)} style={{ flex: 1, height: '40px', borderRadius: '10px', border: `2px solid ${stress === i ? 'var(--coral-soft)' : 'var(--navy-light)'}`, background: stress === i ? 'rgba(249,115,22,0.15)' : 'var(--navy-light)', color: stress === i ? 'var(--coral-soft)' : 'var(--text-secondary)', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }} id={`stress-${i}`}>{i}</button>
-                    ))}
-                  </div>
-                </div>
+                {/* Energia e Estresse — em breve (aguarda migration no banco) */}
 
                 {saveError && (
                   <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '12px', padding: '0.875rem', color: 'var(--red-alert)', fontSize: '0.85rem', textAlign: 'center' }}>
