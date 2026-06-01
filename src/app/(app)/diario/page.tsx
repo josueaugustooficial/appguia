@@ -89,16 +89,16 @@ export default function DiarioPage() {
     setSaving(true)
     setSaveError(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      // ✅ FIX: user ausente reseta saving e retorna com mensagem
-      if (!user) {
+      // ✅ FIX: getSession() é instantâneo (cache local), getUser() faz HTTP round-trip
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
         setSaveError('Sessão expirada. Faça login novamente.')
         return
       }
 
       const { error } = await supabase.from('diary_entries').insert({
         child_id: (activeChild as Record<string, string>).id,
-        parent_id: user.id,
+        parent_id: session.user.id,
         entry_type: entryType,
         title: title || ENTRY_TYPES.find(e => e.id === entryType)?.label || '',
         description,
@@ -109,10 +109,10 @@ export default function DiarioPage() {
         what_helped: whatHelped || null,
       })
 
-      // ✅ FIX: trata erro de RLS/DB explicitamente
+      // ✅ FIX: trata erro de RLS/DB com código do erro visível
       if (error) {
-        console.error('[Diário] Erro ao salvar:', error.message)
-        setSaveError('Erro ao salvar. Tente novamente.')
+        console.error('[Diário] Erro ao salvar:', error.code, error.message, error.details)
+        setSaveError(`Erro ao salvar: ${error.message}`)
         return
       }
 

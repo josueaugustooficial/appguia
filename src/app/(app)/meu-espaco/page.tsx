@@ -76,22 +76,25 @@ export default function MeuEspacoPage() {
     setIsSaving(true)
     setSaveError(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      // ✅ FIX CRÍTICO: getSession() é mais confiável no cliente do que getUser()
+      // getUser() faz round-trip ao servidor e pode falhar por timing
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
         setSaveError('Sessão expirada. Faça login novamente.')
         return
       }
-      // ✅ FIX: onConflict explícito para garantir UPDATE policy correta
-      const { error } = await supabase.from('parent_checkins').upsert({
-        user_id: user.id,
-        checkin_date: new Date().toISOString().split('T')[0],
+      // ✅ FIX: insert simples — upsert com onConflict falha silenciosamente
+      // se a constraint UNIQUE 'user_id,checkin_date' não existir no banco.
+      // Insert garante que o erro seja reportado e o dado seja sempre inserido.
+      const { error } = await supabase.from('parent_checkins').insert({
+        user_id: session.user.id,
         mood_score: mood,
         energy_score: energy,
         stress_score: stress,
-      }, { onConflict: 'user_id,checkin_date' })
+      })
       if (error) {
-        console.error('[MEU-ESPACO SAVE ERROR]', error.message)
-        setSaveError('Erro ao salvar. Tente novamente.')
+        console.error('[MEU-ESPACO SAVE ERROR]', error.code, error.message, error.details)
+        setSaveError(`Erro ao salvar: ${error.message}`)
         return
       }
       setCheckinSaved(true)

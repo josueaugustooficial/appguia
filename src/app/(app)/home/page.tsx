@@ -94,6 +94,8 @@ export default function HomePage() {
     setIsCheckingIn(true)
     setCheckinError(null)
     try {
+      // ✅ FIX: usa user do contexto (já disponível via useAuth)
+      // Evita getUser() que faz round-trip HTTP e pode falhar por timing
       const { error } = await supabase
         .from('parent_checkins')
         .insert({
@@ -101,8 +103,8 @@ export default function HomePage() {
           mood_score: mood,
         })
       if (error) {
-        console.error('[CHECKIN ERROR]', error)
-        setCheckinError('Erro ao registrar. Tente novamente.')
+        console.error('[CHECKIN ERROR]', error.code, error.message, error.details)
+        setCheckinError(`Erro: ${error.message}`)
         return
       }
       setCheckinMood(mood)

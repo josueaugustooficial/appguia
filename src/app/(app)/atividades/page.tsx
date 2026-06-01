@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Check } from '@phosphor-icons/react'
 import { createClient } from '@/lib/supabase/client'
@@ -35,7 +35,7 @@ const CATEGORIES = [
 
 export default function AtividadesPage() {
   const { activeChild } = useChild()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [category, setCategory] = useState('all')
   const [selected, setSelected] = useState<typeof ACTIVITIES[0] | null>(null)
   const [logged, setLogged] = useState<string[]>([])
@@ -49,20 +49,21 @@ export default function AtividadesPage() {
     setLoggingId(activity.id)
     setLogError(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      // ✅ FIX: getSession() é instantâneo (cache local), getUser() faz HTTP round-trip
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
         setLogError('Usuário não autenticado.')
         return
       }
       const { error } = await supabase.from('activity_logs').insert({
         child_id: (activeChild as Record<string, string>).id,
-        parent_id: user.id,
+        parent_id: session.user.id,
         notes: `Atividade: ${activity.title}`,
         child_enjoyed: true,
       })
       if (error) {
-        console.error('[ACTIVITY LOG ERROR]', error)
-        setLogError('Erro ao registrar atividade.')
+        console.error('[ACTIVITY LOG ERROR]', error.code, error.message, error.details)
+        setLogError(`Erro ao registrar: ${error.message}`)
         return
       }
       setLogged(p => [...p, activity.id])

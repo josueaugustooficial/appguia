@@ -155,8 +155,9 @@ export default function SOSPage() {
     setIsSaving(true)
     setSaveError(null)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
+      // ✅ FIX: getSession() é instantâneo (cache local), getUser() faz HTTP round-trip
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
         setSaveError('Sessão expirada. Faça login novamente.')
         return
       }
@@ -164,7 +165,7 @@ export default function SOSPage() {
       // ✅ Salva sessão SOS
       const { error: sosError } = await supabase.from('sos_sessions').insert({
         child_id: (activeChild as Record<string, string>).id,
-        parent_id: user.id,
+        parent_id: session.user.id,
         crisis_type: crisisType,
         duration_seconds: seconds,
         intensity,
@@ -174,15 +175,15 @@ export default function SOSPage() {
       })
 
       if (sosError) {
-        console.error('[SOS] Erro ao salvar sessão:', sosError.message)
-        setSaveError('Erro ao salvar. Tente novamente.')
+        console.error('[SOS] Erro ao salvar sessão:', sosError.code, sosError.message, sosError.details)
+        setSaveError(`Erro ao salvar: ${sosError.message}`)
         return
       }
 
       // ✅ Salva também no diário
       const { error: diaryError } = await supabase.from('diary_entries').insert({
         child_id: (activeChild as Record<string, string>).id,
-        parent_id: user.id,
+        parent_id: session.user.id,
         entry_type: 'crisis',
         title: `Crise: ${CRISIS_TYPES.find(c => c.id === crisisType)?.title || 'Crise'}`,
         intensity,
